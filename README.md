@@ -11,4 +11,30 @@ This is a very simple program. It performs the following steps:
 
 Files are compared using the S3 ETag, which is the MD5 of the contents for S3 objects that have been uploaded in one go.
 
+Usage
+=====
+`
+  s3upload -bucket=bucket-name -dir=/path/to/files
+`  
+
+Other command line options:
+
+* `-verbose` Print additional messages to stderr
+* `-help` Print help text to stderr
+
+Environment
+===========
+
+This utility expects the following environment variables to be set:
+
+* `AWS_ACCESS_KEY_ID` The AWS access key
+* `AWS_SECRET_ACCESS_KEY` The AWS secret key
+
+AWS Permissions
+===============
+
+See the `permissions.json` for an example AWS policy that provides the minimum AWS permissions required by this utility.
+
+
+  
 
