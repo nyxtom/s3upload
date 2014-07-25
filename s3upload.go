@@ -12,22 +12,29 @@ import (
 	"mime"
 	"os"
 	"path"
-	"strings"
 )
 
 const programName = "s3upload"
 
 // variables set by command line flags
 var bucketName string
-var dirName string
+var baseDir string
 var showHelp bool
 var verbose bool
+var recursive bool
+var includeUnknownMimeTypes bool
+
+// contains information about every object in the bucket
+// maps the object key name to its etag
+var s3Objects = make(map[string]string)
 
 func main() {
 	flag.StringVar(&bucketName, "bucket", "", "S3 Bucket Name (required)")
-	flag.StringVar(&dirName, "dir", "", "Local directory (required)")
+	flag.StringVar(&baseDir, "dir", "", "Local directory (required)")
 	flag.BoolVar(&verbose, "verbose", false, "Print extra log messages")
 	flag.BoolVar(&showHelp, "help", false, "Show this help")
+	flag.BoolVar(&recursive, "recursive", false, "recurse into sub-directories")
+	flag.BoolVar(&includeUnknownMimeTypes, "include-unknown-mime-types", false, "upload files with unknown mime types")
 
 	flag.Parse()
 	if showHelp {
@@ -40,7 +47,7 @@ func main() {
 		log.Fatalf("Must specify bucket: use '%s -help' for usage", programName)
 	}
 
-	if dirName == "" {
+	if baseDir == "" {
 		log.Fatalf("Must specify directory: use '%s -help' for usage", programName)
 	}
 
@@ -56,8 +63,6 @@ func main() {
 		log.Println("Listing objects in bucket")
 	}
 
-	// maps key name to etag
-	s3Objects := make(map[string]string)
 	marker := ""
 	for {
 		listResp, err := bucket.List("", "/", marker, 1000)
@@ -78,8 +83,12 @@ func main() {
 		}
 	}
 
+	processDir(baseDir, "", bucket)
+}
+
+func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 	if verbose {
-		log.Println("Scanning directory")
+		log.Printf("Processing directory %s", dirName)
 	}
 
 	fileInfos, err := ioutil.ReadDir(dirName)
@@ -89,17 +98,22 @@ func main() {
 
 	for _, fileInfo := range fileInfos {
 		if fileInfo.IsDir() {
+			if recursive {
+				subDirName := path.Join(dirName, fileInfo.Name())
+				processDir(subDirName, s3KeyPrefix+fileInfo.Name()+"/", bucket)
+			}
 			continue
 		}
 		filePath := path.Join(dirName, fileInfo.Name())
+		s3Key := s3KeyPrefix + fileInfo.Name()
 
 		putRequired := false
 		var data []byte
 
-		s3ETag := s3Objects[fileInfo.Name()]
+		s3ETag := s3Objects[s3Key]
 		if s3ETag == "" {
 			if verbose {
-				log.Printf("Not found in S3 bucket: %s", fileInfo.Name())
+				log.Printf("Not found in S3 bucket: %s", s3Key)
 			}
 			putRequired = true
 		}
@@ -109,41 +123,40 @@ func main() {
 			log.Fatal(err)
 		}
 
+		// if the object exists, then we check the MD5 of the file to determine whether
+		// the file needs to be uploaded
 		if !putRequired {
-
 			digest := md5.Sum(data)
 			// note the need to convert digest to a slice because it is a byte array ([16]byte)
 			fileETag := "\"" + hex.EncodeToString(digest[:]) + "\""
 
 			if fileETag != s3ETag {
 				if verbose {
-					log.Printf("Need to upload %s: expected ETag = %s, actual = %s", fileInfo.Name(), fileETag, s3ETag)
+					log.Printf("Need to upload %s: expected ETag = %s, actual = %s", filePath, fileETag, s3ETag)
 				}
 				putRequired = true
 			}
 		}
 
 		if putRequired {
-			var contentType string
-			if strings.HasSuffix(fileInfo.Name(), ".jpg") {
-				contentType = "image/jpeg"
-			} else if strings.HasSuffix(fileInfo.Name(), ".gif") {
-				contentType = "image/gif"
-			} else {
-				contentType = mime.TypeByExtension(path.Ext(fileInfo.Name()))
+			// TODO: this should be configurable, but for now if the mime-type cannot
+			// be determined, do not upload
+			contentType := mime.TypeByExtension(path.Ext(fileInfo.Name()))
+			if contentType == "" && includeUnknownMimeTypes {
+				contentType = "application/octet-stream"
 			}
 
 			if contentType != "" {
-				err = bucket.Put(fileInfo.Name(), data, contentType, s3.Private)
+				err = bucket.Put(s3Key, data, contentType, s3.Private)
 				if err != nil {
 					log.Fatal(err)
 				}
-				log.Printf("Uploaded %s\n", fileInfo.Name())
+				log.Printf("Uploaded %s\n", s3Key)
 			}
 
 		} else {
 			if verbose {
-				log.Printf("Identical file, no upload required: %s", fileInfo.Name())
+				log.Printf("Identical file, no upload required: %s", filePath)
 			}
 		}
 

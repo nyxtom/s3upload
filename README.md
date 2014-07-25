@@ -19,6 +19,8 @@ Usage
 
 Other command line options:
 
+* `-recursive` Indicates that files in sub-directories should be uploaded as well
+* `-include-unknown-mime-types` By default a file with an unknown mime type is not uploaded
 * `-verbose` Print additional messages to stderr
 * `-help` Print help text to stderr
 
