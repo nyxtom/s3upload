@@ -12,6 +12,7 @@ import (
 	"mime"
 	"os"
 	"path"
+	"strings"
 )
 
 const programName = "s3upload"
@@ -98,7 +99,7 @@ func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 
 	for _, fileInfo := range fileInfos {
 		if fileInfo.IsDir() {
-			if recursive {
+			if shouldRecurseInto(fileInfo.Name()) {
 				subDirName := path.Join(dirName, fileInfo.Name())
 				processDir(subDirName, s3KeyPrefix+fileInfo.Name()+"/", bucket)
 			}
@@ -161,4 +162,20 @@ func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 		}
 
 	}
+}
+
+func shouldRecurseInto(dirName string) bool {
+	if !recursive {
+		return false
+	}
+
+	if strings.HasPrefix(dirName, ".") || strings.HasPrefix(dirName, "_") {
+		return false
+	}
+
+	if dirName == "lost+found" {
+		return false
+	}
+
+	return true
 }
