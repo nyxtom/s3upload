@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"github.com/crowdmob/goamz/aws"
+	"github.com/crowdmob/goamz/s3"
 	"io/ioutil"
-	"launchpad.net/goamz/aws"
-	"launchpad.net/goamz/s3"
 	"log"
 	"mime"
 	"os"
@@ -24,10 +24,12 @@ var showHelp bool
 var verbose bool
 var recursive bool
 var includeUnknownMimeTypes bool
+var ignore string
 
 // contains information about every object in the bucket
 // maps the object key name to its etag
 var s3Objects = make(map[string]string)
+var ignoreNames = make(map[string]string)
 
 func main() {
 	flag.StringVar(&bucketName, "bucket", "", "S3 Bucket Name (required)")
@@ -36,6 +38,7 @@ func main() {
 	flag.BoolVar(&showHelp, "help", false, "Show this help")
 	flag.BoolVar(&recursive, "recursive", false, "recurse into sub-directories")
 	flag.BoolVar(&includeUnknownMimeTypes, "include-unknown-mime-types", false, "upload files with unknown mime types")
+	flag.StringVar(&ignore, "ignore", "", "Comma-separated list of files/directories to ignore")
 
 	flag.Parse()
 	if showHelp {
@@ -50,6 +53,10 @@ func main() {
 
 	if baseDir == "" {
 		log.Fatalf("Must specify directory: use '%s -help' for usage", programName)
+	}
+
+	for _, name := range strings.Split(ignore, ",") {
+		ignoreNames[name] = name
 	}
 
 	auth, err := aws.EnvAuth()
@@ -98,6 +105,14 @@ func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 	}
 
 	for _, fileInfo := range fileInfos {
+		filePath := path.Join(dirName, fileInfo.Name())
+
+		// Ignore symlinks for now.
+		// TODO: add option to follow symlinks
+		if (fileInfo.Mode() & os.ModeSymlink) != 0 {
+			continue
+		}
+
 		if fileInfo.IsDir() {
 			if shouldRecurseInto(fileInfo.Name()) {
 				subDirName := path.Join(dirName, fileInfo.Name())
@@ -105,7 +120,9 @@ func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 			}
 			continue
 		}
-		filePath := path.Join(dirName, fileInfo.Name())
+		if ignoreNames[fileInfo.Name()] != "" {
+			continue
+		}
 		s3Key := s3KeyPrefix + fileInfo.Name()
 
 		putRequired := false
@@ -148,7 +165,7 @@ func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 			}
 
 			if contentType != "" {
-				err = bucket.Put(s3Key, data, contentType, s3.Private)
+				err = bucket.Put(s3Key, data, contentType, s3.Private, s3.Options{})
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -170,6 +187,10 @@ func shouldRecurseInto(dirName string) bool {
 	}
 
 	if strings.HasPrefix(dirName, ".") || strings.HasPrefix(dirName, "_") {
+		return false
+	}
+
+	if ignoreNames[dirName] != "" {
 		return false
 	}
 
