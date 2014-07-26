@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/s3"
+	"github.com/goamz/goamz/aws"
+	"github.com/goamz/goamz/s3"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -73,7 +73,7 @@ func main() {
 
 	marker := ""
 	for {
-		listResp, err := bucket.List("", "/", marker, 1000)
+		listResp, err := bucket.List("", "", marker, 1000)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -83,11 +83,12 @@ func main() {
 			marker = key.Key
 		}
 
-		if !listResp.IsTruncated {
-			break
-		}
 		if verbose {
 			log.Printf("%d objects loaded", len(s3Objects))
+		}
+
+		if !listResp.IsTruncated {
+			break
 		}
 	}
 
