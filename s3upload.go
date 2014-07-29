@@ -66,7 +66,8 @@ func main() {
 			s3BasePrefix += "/"
 		}
 		if verbose {
-			log.Printf("s3BasePrefix = '%s'", s3BasePrefix)
+			log.Printf("s3-prefix = '%s'", s3BasePrefix)
+			log.Printf("dir = %s", baseDir)
 		}
 	}
 
