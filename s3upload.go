@@ -25,6 +25,7 @@ var verbose bool
 var recursive bool
 var includeUnknownMimeTypes bool
 var ignore string
+var s3BasePrefix string
 
 // contains information about every object in the bucket
 // maps the object key name to its etag
@@ -39,6 +40,7 @@ func main() {
 	flag.BoolVar(&recursive, "recursive", false, "recurse into sub-directories")
 	flag.BoolVar(&includeUnknownMimeTypes, "include-unknown-mime-types", false, "upload files with unknown mime types")
 	flag.StringVar(&ignore, "ignore", "", "Comma-separated list of files/directories to ignore")
+	flag.StringVar(&s3BasePrefix, "s3-prefix", "", "Prefix for s3 objects")
 
 	flag.Parse()
 	if showHelp {
@@ -59,6 +61,15 @@ func main() {
 		ignoreNames[name] = name
 	}
 
+	if s3BasePrefix != "" {
+		if !strings.HasSuffix(s3BasePrefix, "/") {
+			s3BasePrefix += "/"
+		}
+		if verbose {
+			log.Printf("s3BasePrefix = '%s'", s3BasePrefix)
+		}
+	}
+
 	auth, err := aws.EnvAuth()
 	if err != nil {
 		log.Fatal(err)
@@ -73,7 +84,7 @@ func main() {
 
 	marker := ""
 	for {
-		listResp, err := bucket.List("", "", marker, 1000)
+		listResp, err := bucket.List(s3BasePrefix, "", marker, 1000)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -92,7 +103,7 @@ func main() {
 		}
 	}
 
-	processDir(baseDir, "", bucket)
+	processDir(baseDir, s3BasePrefix, bucket)
 }
 
 func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
