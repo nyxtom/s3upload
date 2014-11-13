@@ -37,6 +37,10 @@ AWS Permissions
 
 See the `permissions.json` for an example AWS policy that provides the minimum AWS permissions required by this utility.
 
+Limitations
+===========
+
+* AWS region is currently hard-coded to ap-southeast-2 (Sydney). Should pick up from the environment and/or command line.
 
   
 
