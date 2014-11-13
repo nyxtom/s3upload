@@ -13,9 +13,11 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 )
 
 const programName = "s3upload"
+const veryLongTime = time.Duration(876600) * time.Hour // 100 years
 
 // variables set by command line flags
 var bucketName string
@@ -26,11 +28,13 @@ var recursive bool
 var includeUnknownMimeTypes bool
 var ignore string
 var s3BasePrefix string
+var timeout time.Duration
 
 // contains information about every object in the bucket
 // maps the object key name to its etag
 var s3Objects = make(map[string]string)
 var ignoreNames = make(map[string]string)
+var stopTime time.Time
 
 func main() {
 	flag.StringVar(&bucketName, "bucket", "", "S3 Bucket Name (required)")
@@ -41,8 +45,10 @@ func main() {
 	flag.BoolVar(&includeUnknownMimeTypes, "include-unknown-mime-types", false, "upload files with unknown mime types")
 	flag.StringVar(&ignore, "ignore", "", "Comma-separated list of files/directories to ignore")
 	flag.StringVar(&s3BasePrefix, "s3-prefix", "", "Prefix for s3 objects")
+	flag.DurationVar(&timeout, "timeout", 0, "Max time to run in seconds, 0=indefinite")
 
 	flag.Parse()
+
 	if showHelp {
 		fmt.Fprintf(os.Stderr, "usage: %s [ options ]\noptions:\n", programName)
 		flag.PrintDefaults()
@@ -56,6 +62,11 @@ func main() {
 	if baseDir == "" {
 		log.Fatalf("Must specify directory: use '%s -help' for usage", programName)
 	}
+
+	if timeout == time.Duration(0) {
+		timeout = veryLongTime
+	}
+	stopTime = time.Now().Add(timeout)
 
 	for _, name := range strings.Split(ignore, ",") {
 		ignoreNames[name] = name
@@ -102,6 +113,10 @@ func main() {
 		if !listResp.IsTruncated {
 			break
 		}
+
+		if time.Now().After(stopTime) {
+			log.Fatal("Timeout limit reached")
+		}
 	}
 
 	processDir(baseDir, s3BasePrefix, bucket)
@@ -118,6 +133,9 @@ func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 	}
 
 	for _, fileInfo := range fileInfos {
+		if time.Now().After(stopTime) {
+			log.Fatal("Timeout limit reached")
+		}
 		filePath := path.Join(dirName, fileInfo.Name())
 
 		// Ignore symlinks for now.
@@ -172,7 +190,7 @@ func processDir(dirName string, s3KeyPrefix string, bucket *s3.Bucket) {
 		if putRequired {
 			// TODO: this should be configurable, but for now if the mime-type cannot
 			// be determined, do not upload
-			contentType := mime.TypeByExtension(path.Ext(fileInfo.Name()))
+			contentType := mime.TypeByExtension(path.Ext(strings.ToLower(fileInfo.Name())))
 			if contentType == "" && includeUnknownMimeTypes {
 				contentType = "application/octet-stream"
 			}
