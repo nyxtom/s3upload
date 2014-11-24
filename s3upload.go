@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"github.com/goamz/goamz/aws"
-	"github.com/goamz/goamz/s3"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -14,6 +12,9 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/goamz/goamz/aws"
+	"github.com/goamz/goamz/s3"
 )
 
 const programName = "s3upload"
@@ -29,6 +30,7 @@ var includeUnknownMimeTypes bool
 var ignore string
 var s3BasePrefix string
 var timeout time.Duration
+var region string
 
 // contains information about every object in the bucket
 // maps the object key name to its etag
@@ -36,8 +38,22 @@ var s3Objects = make(map[string]string)
 var ignoreNames = make(map[string]string)
 var stopTime time.Time
 
+var awsRegions = map[string]aws.Region{
+	"usgovwest":    aws.USGovWest,
+	"useast":       aws.USEast,
+	"uswest":       aws.USWest,
+	"uswest2":      aws.USWest2,
+	"euwest":       aws.EUWest,
+	"eucentral":    aws.EUCentral,
+	"apsoutheast":  aws.APSoutheast,
+	"apsoutheast2": aws.APSoutheast2,
+	"apnortheast":  aws.APNortheast,
+	"saeast":       aws.SAEast,
+}
+
 func main() {
 	flag.StringVar(&bucketName, "bucket", "", "S3 Bucket Name (required)")
+	flag.StringVar(&region, "region", "", "AWS Region (required)")
 	flag.StringVar(&baseDir, "dir", "", "Local directory (required)")
 	flag.BoolVar(&verbose, "verbose", false, "Print extra log messages")
 	flag.BoolVar(&showHelp, "help", false, "Show this help")
@@ -87,7 +103,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s3Config := s3.New(auth, aws.APSoutheast2)
+	s3Config := s3.New(auth, awsRegions[region])
 	bucket := &s3.Bucket{S3: s3Config, Name: bucketName}
 
 	if verbose {
