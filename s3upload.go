@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strings"
+
 	"time"
 
 	"github.com/goamz/goamz/aws"
@@ -39,21 +40,21 @@ var ignoreNames = make(map[string]string)
 var stopTime time.Time
 
 var awsRegions = map[string]aws.Region{
-	"usgovwest":    aws.USGovWest,
-	"useast":       aws.USEast,
-	"uswest":       aws.USWest,
-	"uswest2":      aws.USWest2,
-	"euwest":       aws.EUWest,
-	"eucentral":    aws.EUCentral,
-	"apsoutheast":  aws.APSoutheast,
-	"apsoutheast2": aws.APSoutheast2,
-	"apnortheast":  aws.APNortheast,
-	"saeast":       aws.SAEast,
+	"us-gov-west-1":  aws.USGovWest,
+	"us-east-1":      aws.USEast,
+	"us-west-1":      aws.USWest,
+	"us-west-2":      aws.USWest2,
+	"eu-west-1":      aws.EUWest,
+	"eu-central-1":   aws.EUCentral,
+	"ap-southeast-1": aws.APSoutheast,
+	"ap-southeast-2": aws.APSoutheast2,
+	"ap-northeast-1": aws.APNortheast,
+	"sa-east-1":      aws.SAEast,
 }
 
 func main() {
 	flag.StringVar(&bucketName, "bucket", "", "S3 Bucket Name (required)")
-	flag.StringVar(&region, "region", "", "AWS Region (required)")
+	flag.StringVar(&region, "region", "", "AWS Region (optional)")
 	flag.StringVar(&baseDir, "dir", "", "Local directory (required)")
 	flag.BoolVar(&verbose, "verbose", false, "Print extra log messages")
 	flag.BoolVar(&showHelp, "help", false, "Show this help")
@@ -79,6 +80,20 @@ func main() {
 		log.Fatalf("Must specify directory: use '%s -help' for usage", programName)
 	}
 
+	if region == "" {
+		region = os.Getenv("AWS_DEFAULT_REGION")
+	}
+
+	if region == "" {
+		fmt.Fprintf(os.Stderr, "AWS_DEFAULT_REGION not set, please specify which aws region you would like to connect to")
+		flag.PrintDefaults()
+		return
+	}
+
+	Sync(bucketName, region, baseDir, ignore, s3BasePrefix, includeUnknownMimeTypes, verbose, recursive, timeout)
+}
+
+func Sync(bucketName, region, baseDir, ignore, s3BasePrefix, includeUnknownMimeTypes string, verbose, recursive bool, timeout int) {
 	if timeout == time.Duration(0) {
 		timeout = veryLongTime
 	}
