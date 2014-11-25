@@ -93,7 +93,7 @@ func main() {
 	Sync(bucketName, region, baseDir, ignore, s3BasePrefix, includeUnknownMimeTypes, verbose, recursive, timeout)
 }
 
-func Sync(bucketName, region, baseDir, ignore, s3BasePrefix, includeUnknownMimeTypes string, verbose, recursive bool, timeout int) {
+func Sync(bucketName, region, baseDir, ignore, s3BasePrefix string, includeUnknownMimeTypes, verbose, recursive bool, timeout time.Duration) {
 	if timeout == time.Duration(0) {
 		timeout = veryLongTime
 	}
